@@ -90,7 +90,7 @@ def get_all_notes(order_by='modified', reverse=True):
     rows.sort(key=lambda x: x['modified_timestamp'], reverse=True)
     return rows
 
-def create_note(options):
+def create(options):
     meta = {
         'created': datetime.now().replace(microsecond=0).isoformat(),
     }
@@ -110,7 +110,6 @@ def rewrite(path):
     stat = p.stat()
     metadata, text
 
-
 def write(path, metadata, text):
     ctime = metadata['created'].timestamp()
     mtime = metadata['modified'].timestamp()
@@ -122,7 +121,6 @@ def write(path, metadata, text):
 
     os.utime(path,(ctime,mtime))
     return path
-
 
 if __name__ == '__main__':
 
