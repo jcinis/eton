@@ -1,12 +1,30 @@
 #!/usr/bin/env python3
 """
 Manage notes using the gitjournal.io notes format
+
+Todo:
+    - [x] Parse note file to return a header dictionary and a markdown body
+    - [x] Convert normal text file to markdown with yaml header
+        - [x] Add modified date based on file modified date
+        - [x] Add created date based on file created date
+        - [x] Add title based on file title
+    - [ ] Convert all files in a folder to new format
+    - [ ] Add tags header and option to add tags at create
+    - [ ] Add images to a folder for linking
+    - [ ] Preserve note dates based on metadata
+    - [ ] Migrate notes to new format
+    - [ ] Create new note
+        - [ ] Add metadata options via the command line similar to docker env (-e)
+          additions.
+        - [ ] Add tags via the command line using -t
+
 """
 import re
 import os
 import json
 import yaml
-import datetime
+import time
+from datetime import datetime
 import pytz
 from pathlib import Path
 
@@ -20,13 +38,13 @@ def get_files(dirpath, extensions):
         rtn.extend(Path(dirpath).glob(ext))
     return rtn
 
-def _has_metadata(body):
+def has_metadata(body):
    return body.startswith('---')
 
-def parse_note(text):
+def parse(text):
     meta = {}
     body = text
-    if _has_metadata(text):
+    if has_metadata(text):
         p = re.compile('---\n(.*?)\n---\n(.*)', flags=re.DOTALL)
         p.search(text).groups()
         (meta, body) = text.split('---\n', 2)[1:]
@@ -34,13 +52,25 @@ def parse_note(text):
     else:
         return (meta, body)
 
-def fetch_note(path):
+def metadata_to_json(metadata):
+    return json.dumps(metadata)
+
+def create_metadata_from_file(filepath):
+    p = Path(filepath)
+    stat = p.stat()
+    return {
+        'created': datetime.utcfromtimestamp(stat.st_ctime).replace(tzinfo=pytz.UTC).replace(microsecond=0),
+        'modified': datetime.utcfromtimestamp(stat.st_mtime).replace(tzinfo=pytz.UTC).replace(microsecond=0),
+        'title': p.stem,
+    }
+
+def fetch(path):
     with open(path,'r') as f:
         return f.read()
 
-def get_note(path):
-    text = fetch_note(path)
-    return parse_note(text)
+def read(path):
+    text = fetch(path)
+    return parse(text)
 
 def get_all_notes(order_by='modified', reverse=True):
     """List all notes by last modified date"""
@@ -52,24 +82,85 @@ def get_all_notes(order_by='modified', reverse=True):
         rows.append({
             'path':str(npath),
             'title':str(npath.stem),
-            'created':stat.st_ctime,
-            'created_iso':datetime.datetime.utcfromtimestamp(stat.st_ctime).replace(tzinfo=pytz.UTC).isoformat(),
-            'modified':stat.st_mtime,
-            'modified_iso':datetime.datetime.utcfromtimestamp(stat.st_mtime).replace(tzinfo=pytz.UTC).isoformat()
+            'created_timestamp':stat.st_ctime,
+            'created_iso':datetime.utcfromtimestamp(stat.st_ctime).replace(tzinfo=pytz.UTC).isoformat(),
+            'modified_timestamp':stat.st_mtime,
+            'modified_iso':datetime.utcfromtimestamp(stat.st_mtime).replace(tzinfo=pytz.UTC).isoformat()
         })
-    rows.sort(key=lambda x: x['modified'], reverse=True)
+    rows.sort(key=lambda x: x['modified_timestamp'], reverse=True)
     return rows
 
-def create_note():
+def create_note(options):
     meta = {
-        'title':'What do you think',
-        'created': datetime.datetime.now().replace(microsecond=0).isoformat(),
+        'created': datetime.now().replace(microsecond=0).isoformat(),
     }
+
+def render(metadata,text):
+    header = yaml.dump(metadata)
+    header = "---\n%s---\n" % header
+    return "%s\n%s" % (header,text)
+
+def create_metadata(options):
+    metadata = {
+        'created': datetime.utcnow().replace(tzinfo=pytz.UTC),
+    }
+
+def rewrite(path):
+    p = Path(path)
+    stat = p.stat()
+    metadata, text
+
+
+def write(path, metadata, text):
+    ctime = metadata['created'].timestamp()
+    mtime = metadata['modified'].timestamp()
+    print("created: %s" % ctime)
+    print("modified: %s" % mtime)
+
+    with open(path,'w') as f:
+        f.write(render(metadata,text))
+
+    os.utime(path,(ctime,mtime))
+    return path
+
 
 if __name__ == '__main__':
 
     notes = get_all_notes()
-    note = get_note(notes[-1]['path'])
-    print(note)
-    #print(json.dumps(note))
 
+    for note in notes:
+        path = note['path']
+        metadata, txt = read(path)
+        if not metadata:
+            metadata = create_metadata_from_file(path)
+
+        rtn = {}
+        rtn['path'] = note['path']
+        rtn['metadata'] = metadata
+        print(yaml.dump(rtn))
+
+
+
+    '''
+    #filepath = notes[-1]['path']
+    #filepath = notes[20]['path']
+    filepath = os.path.join(DIR,'jcinis-14117.md')
+    metadata, text = read(filepath)
+    if not metadata:
+        metadata = create_metadata_from_file(filepath)
+
+    newpath = filepath+".new.txt"
+    write(newpath,metadata,text)
+    print(render(metadata,text))
+    '''
+
+    '''
+    note = get_note(filepath)
+    metadata = metadata_from_file(filepath)
+    metadata['tags'] = ['journal','your mom']
+    metadata_json = metadata_to_json(metadata)
+    print(metadata_json)
+    print(json.dumps(note))
+    note = (metadata,note[1])
+    print(output(*note))
+    '''
