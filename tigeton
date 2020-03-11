@@ -29,7 +29,8 @@ import pytz
 from pathlib import Path
 
 DIR = os.path.expanduser('~/notes')
-EXTENSIONS = ('*.txt','*.md')
+EXTENSION = 'md'
+FILENAME_PATTERNS = ('*.txt','*.md')
 
 def get_files(dirpath, extensions):
     """Gets all files with given extension"""
@@ -76,7 +77,7 @@ def get_all_notes(order_by='modified', reverse=True):
     """List all notes by last modified date"""
 
     rows = []
-    notes = get_files(DIR, EXTENSIONS)
+    notes = get_files(DIR, FILENAME_PATTERNS)
     for npath in notes:
         stat = npath.stat()
         rows.append({
@@ -90,42 +91,70 @@ def get_all_notes(order_by='modified', reverse=True):
     rows.sort(key=lambda x: x['modified_timestamp'], reverse=True)
     return rows
 
-def create(options):
-    meta = {
-        'created': datetime.now().replace(microsecond=0).isoformat(),
+def create_metadata(options):
+    metadata = {
+        'created': datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0),
+        'modified': datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0),
     }
+    return { **metadata, **options }
+
+def create(options):
+    text = ''
+    metadata = create_metadata(options)
+    filename = '%s.%s' % (metadata['created'].isoformat(), EXTENSION)
+    filepath = os.path.join(DIR,filename)
 
 def render(metadata,text):
     header = yaml.dump(metadata)
     header = "---\n%s---\n" % header
     return "%s\n%s" % (header,text)
 
-def create_metadata(options):
-    metadata = {
-        'created': datetime.utcnow().replace(tzinfo=pytz.UTC),
-    }
+def reformat_all():
+    '''Reformats all note documents while maintaining modified date'''
+    notes = get_all_notes()
+    paths = []
+    for note in notes:
+        filepath = note['path']
+        paths.append(reformat(filepath))
+    return paths
 
-def rewrite(path):
-    p = Path(path)
-    stat = p.stat()
-    metadata, text
+def reformat(filepath):
+    '''
+    Updates the note to the current document format.
 
-def write(path, metadata, text):
-    ctime = metadata['created'].timestamp()
-    mtime = metadata['modified'].timestamp()
-    print("created: %s" % ctime)
-    print("modified: %s" % mtime)
+    Steps:
+    - Loads a exisitng note
+    - Rebuilds metadata
+    - Render yaml and markdown as plaintext
+    - Overwrite the file while maintining created and modified dates
+    '''
+    path = Path(filepath)
+    stat = path.stat()
+    metadata, text = read(filepath)
+    metadata = {**create_metadata_from_file(filepath), **metadata}
+    ctime = stat.st_ctime <= stat.st_mtime and stat.st_ctime or stat.st_mtime
+    return write(filepath, metadata, text, ctime=ctime, mtime=stat.st_mtime)
 
-    with open(path,'w') as f:
-        f.write(render(metadata,text))
+def write(filepath, metadata, text, ctime=None, mtime=None):
+    '''
+    Renders a note document and writes it to the notes directory. Optionally
+    a created and modified timestamp can be sent to preserve or modify the file
+    dates.
+    '''
+    with open(filepath, 'w') as file_pointer:
+        file_pointer.write(render(metadata, text))
 
-    os.utime(path,(ctime,mtime))
-    return path
+    # Update local file dates
+    if ctime and mtime:
+        os.utime(filepath, (ctime, mtime))
+
+    return filepath
 
 if __name__ == '__main__':
+    paths = reformat_all()
+    print("Reformat complete: %s notes were reformatted" % len(paths))
 
-    notes = get_all_notes()
-
+    '''
     for note in notes:
         path = note['path']
         metadata, txt = read(path)
@@ -137,9 +166,6 @@ if __name__ == '__main__':
         rtn['metadata'] = metadata
         print(yaml.dump(rtn))
 
-
-
-    '''
     #filepath = notes[-1]['path']
     #filepath = notes[20]['path']
     filepath = os.path.join(DIR,'jcinis-14117.md')
