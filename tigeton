@@ -16,7 +16,7 @@ Todo:
     - [ ] Create new note
         - [ ] Add metadata options via the command line similar to docker env (-e) additions.
         - [ ] Add tags via the command line using -t
-    - [ ] Update date when saving an existing message
+    - [x] Update date when saving an existing message
 
 """
 import re
@@ -33,6 +33,9 @@ import yaml
 DIR = os.path.expanduser('~/notes')
 EXTENSION = 'md'
 FILENAME_PATTERNS = ('*.txt', '*.md')
+
+NOTE_METADATA = 0
+NOTE_TEXT = 1
 
 def get_files(dirpath, extensions):
     '''Gets all files with given extension'''
@@ -100,6 +103,10 @@ def create_metadata(options={}):
         'modified': datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0),
     }
     return { **metadata, **options }
+
+def update_metadata_modified(metadata):
+    metadata['modified'] = datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0)
+    return metadata
 
 def slugify(text):
     '''Converts a string to a slug'''
@@ -176,6 +183,11 @@ def git_update(filepath):
     relpath = os.path.relpath(filepath,DIR)
     sp = subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Editing note %s' % relpath])
 
+def git_diff(filepath):
+    relpath = os.path.relpath(filepath,DIR)
+    sp = subprocess.run(['git', '-C', DIR, 'diff', relpath, '--name-status'], capture_output=True)
+    print(sp)
+
 def git_status():
     sp = subprocess.run(['git','-C',DIR,'status'])
 
@@ -219,6 +231,7 @@ def main():
         MODE_ADD = 1
         MODE_UPDATE = 2
         MODE = MODE_UPDATE
+        LAST = {}
 
         # Create new note
         options = {}
@@ -231,23 +244,48 @@ def main():
         filename = "%s.%s" % (slug, EXTENSION)
         filepath = os.path.join(DIR,filename)
         path = Path(filepath)
+
+        # create file if it doesn't exist
         if not path.is_file():
             MODE = MODE_ADD
             write(filepath, metadata, "")
 
-        #print(filepath)
-        #print([os.environ.get('EDITOR','vim'), filepath])
+        else:
+            LAST = read(filepath)
+
+
+        # datetime when starting edit
         print(datetime.utcnow().isoformat())
+
+        # open in EDITOR
         edit_subprocess = subprocess.run([os.environ.get('EDITOR','vim'), filepath])
         print(edit_subprocess)
+
+        # datetime when closing editor
         print(datetime.utcnow().isoformat())
 
+        # if new file
         if MODE == MODE_ADD:
             git_add(filepath)
+
+        # if editing file
         else:
+            CURR = read(filepath)
+            if LAST and LAST == CURR:
+                print('UNMODIFIED')
+            else:
+                print('MODIFIED')
+                # Update modified date
+                write(filepath, update_metadata_modified(CURR[NOTE_METADATA]), CURR[NOTE_TEXT])
+
+                del LAST
+                del CURR
+
+            # update git repo
             git_update(filepath)
 
-        git_status()
+        # git status of notes
+        #git_status()
 
 if __name__ == '__main__':
     main()
