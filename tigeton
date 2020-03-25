@@ -14,9 +14,9 @@ Todo:
     - [ ] Preserve note dates based on metadata
     - [ ] Migrate notes to new format
     - [ ] Create new note
-        - [ ] Add metadata options via the command line similar to docker env (-e)
-          additions.
+        - [ ] Add metadata options via the command line similar to docker env (-e) additions.
         - [ ] Add tags via the command line using -t
+    - [ ] Update date when saving an existing message
 
 """
 import re
