@@ -22,6 +22,7 @@ Todo:
 import re
 import os
 import json
+import subprocess
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -164,6 +165,20 @@ def write(filepath, metadata, text, ctime=None, mtime=None):
 
     return filepath
 
+def git_add(filepath):
+
+    relpath = os.path.relpath(filepath,DIR)
+    sp = subprocess.run(['git', '-C', DIR, 'add', relpath])
+    sp = subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Adding new note %s' % relpath])
+
+def git_update(filepath):
+
+    relpath = os.path.relpath(filepath,DIR)
+    sp = subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Editing note %s' % relpath])
+
+def git_status():
+    sp = subprocess.run(['git','-C',DIR,'status'])
+
 def whatwhat(options):
     print(options)
 
@@ -200,6 +215,11 @@ def main():
     elif args.slug:
         print(slugify(args.slug))
     else:
+
+        MODE_ADD = 1
+        MODE_UPDATE = 2
+        MODE = MODE_UPDATE
+
         # Create new note
         options = {}
         if args.title:
@@ -212,15 +232,22 @@ def main():
         filepath = os.path.join(DIR,filename)
         path = Path(filepath)
         if not path.is_file():
+            MODE = MODE_ADD
             write(filepath, metadata, "")
 
         #print(filepath)
-        import subprocess
-        print([os.environ.get('EDITOR','vim'), filepath])
-        subprocess.call([os.environ.get('EDITOR','vim'), filepath])
+        #print([os.environ.get('EDITOR','vim'), filepath])
+        print(datetime.utcnow().isoformat())
+        edit_subprocess = subprocess.run([os.environ.get('EDITOR','vim'), filepath])
+        print(edit_subprocess)
+        print(datetime.utcnow().isoformat())
 
+        if MODE == MODE_ADD:
+            git_add(filepath)
+        else:
+            git_update(filepath)
 
-
+        git_status()
 
 if __name__ == '__main__':
     main()
