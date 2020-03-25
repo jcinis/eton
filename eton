@@ -9,18 +9,22 @@ Todo:
         - [x] Add created date based on file created date
         - [x] Add title based on file title
     - [x] Convert all files in a folder to new format
-    - [ ] Add tags header and option to add tags at create
-    - [ ] Add images to a folder for linking
-    - [ ] Preserve note dates based on metadata
-    - [ ] Migrate notes to new format
+    - [x] Add tags header and option to add tags at create
     - [ ] Create new note
         - [ ] Add metadata options via the command line similar to docker env (-e) additions.
-        - [ ] Add tags via the command line using -t
+        - [x] Add tags via the command line using -t
+        - [ ] Append stdin text if piped in
     - [x] Update date when saving an existing message
+    - [ ] Add tab completion for selecting notes
+    - [ ] Add images to a folder for linking
+    - [ ] Implement 'reformat-all' to migrate notes to the latest document format
+    - [ ] Preserve note dates based on metadata
+    - [x] Implement 'push' and 'pull' from repo
 
 """
 import re
 import os
+import sys
 import json
 import subprocess
 import argparse
@@ -191,6 +195,12 @@ def git_diff(filepath):
 def git_status():
     sp = subprocess.run(['git','-C',DIR,'status'])
 
+def git_push():
+    sp = subprocess.run(['git', '-C', DIR, 'push', 'origin', 'master'])
+
+def git_pull():
+    sp = subprocess.run(['git', '-C', DIR, 'pull', 'origin', 'master'])
+
 def whatwhat(options):
     print(options)
 
@@ -198,34 +208,46 @@ def main():
     '''
     Parses command line input and orchestrates core CLI functionality
 
-    Usage: note [filename]
+    Usage: eton [filename]
 
     Examples:
-    note
-    note --new
-    note --create
-    note --create --title 'my new note'
-    note --title 'my new note'
-    note --reformat 'my new note.txt'
-    note --reformat-all
+    eton
+    eton --title 'My new note'
+    eton --title 'My new note' -t journal -t ideas
+    eton my-new-note.md
+    eton read my-new-note.md
+    eton reformat my-new-note.md
+    eton reformat-all
     '''
 
     parser = argparse.ArgumentParser(description='Note creation and management')
-    parser.add_argument('--filename', help="filename of the note to create or modify")
-    parser.add_argument('--title', help="title of note - a slug of which will be used for the filename by default")
-    parser.add_argument('--read', help="Output the content of the note file")
-    parser.add_argument('--slug', help="Create slug from string")
-    parser.add_argument('--reformat',
-            help="reformats the passed filename to the latest doc format",
-            action="store_true")
+    parser.add_argument('--title', '-T', help="title of note - a slug of which will be used for the filename by default")
+    parser.add_argument('--tag', '-t', dest='tags', action='append')
+    parser.add_argument('action', nargs='?', choices=['read', 'edit',
+        'reformat', 'reformat-all', 'slug', 'push', 'pull'], default='edit', help='action to perform on the note')
+    parser.add_argument('filename', nargs='?', help='filename of the note to create or modify')
     args = parser.parse_args()
 
-    if args.reformat and args.filename:
-        print("Reformat: %s" % args.filename)
-    elif args.read and args.filename:
+    print(args)
+
+    if args.action == 'read' and args.filename:
         print(fetch(os.path.join(DIR,args.filename)))
-    elif args.slug:
-        print(slugify(args.slug))
+
+    elif args.action == 'reformat' and args.filename:
+        raise NotImplementedError('To be implemented: reformat')
+
+    elif args.action == 'reformat-all':
+        raise NotImplementedError('To be implemented: reformat-all')
+
+    elif args.action == 'slug' and args.title:
+        print(slugify(args.title))
+
+    elif args.action == 'pull':
+        git_pull()
+
+    elif args.action == 'push':
+        git_push()
+
     else:
 
         MODE_ADD = 1
@@ -233,12 +255,15 @@ def main():
         MODE = MODE_UPDATE
         LAST = {}
 
-        # Create new note
+        # Create new note metadata
         options = {}
         if args.title:
             options['title'] = args.title
+        if args.tags:
+            options['tags'] = args.tags
 
         metadata = create_metadata(options)
+        #text = sys.stdin and "".join(sys.stdin.readlines()) or ""
 
         slug = args.title and slugify(args.title) or metadata.get('created').isoformat()
         filename = "%s.%s" % (slug, EXTENSION)
