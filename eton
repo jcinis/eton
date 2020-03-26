@@ -7,6 +7,7 @@ import re
 import os
 import sys
 import json
+import fileinput
 import subprocess
 import argparse
 from datetime import datetime
@@ -247,6 +248,7 @@ def main():
     eton --title 'My new note' -t journal -t ideas
     eton my-new-note.md
     eton read my-new-note.md
+    eton read my-new-note.md --pretty
     eton reformat my-new-note.md
     eton reformat-all
     '''
@@ -254,6 +256,7 @@ def main():
     parser = argparse.ArgumentParser(description='Note creation and management')
     parser.add_argument('--title', '-T', help="title of note - a slug of which will be used for the filename by default")
     parser.add_argument('--tag', '-t', dest='tags', action='append')
+    #parser.add_argument('-', dest='pipe', action='store_true')
     parser.add_argument('--pretty', action='store_true')
     parser.add_argument('action', nargs='?', choices=['read', 'edit', 'reformat', 'reformat-all', 'slug', 'push', 'pull'], default='edit', help='action to perform on the note')
     parser.add_argument('filename', nargs='?', help='filename of the note to create or modify')
@@ -293,11 +296,18 @@ def main():
         options = {}
         if args.title:
             options['title'] = args.title
+
         if args.tags:
             options['tags'] = args.tags
 
         metadata = create_metadata(options)
-        #text = sys.stdin and "".join(sys.stdin.readlines()) or ""
+        text = ''
+
+        # Parse piped in text
+        #if args.pipe:
+        #    for line in fileinput.input():
+        #        text += line
+        #    fileinput.close()
 
         slug = args.title and slugify(args.title) or metadata.get('created').isoformat()
         filename = "%s.%s" % (slug, EXTENSION)
@@ -307,11 +317,10 @@ def main():
         # create file if it doesn't exist
         if not path.is_file():
             MODE = MODE_ADD
-            write(filepath, metadata, "")
+            write(filepath, metadata, text)
 
         else:
             LAST = read(filepath)
-
 
         # datetime when starting edit
         print(datetime.utcnow().isoformat())
