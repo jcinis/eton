@@ -185,6 +185,43 @@ def git_pull():
 def whatwhat(options):
     print(options)
 
+def which(program):
+    '''
+    Lifted from https://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
+    '''
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
+
+def pretty(filepath):
+    '''
+    Prints note body and formats using 'glow' if it is installed on the system
+
+    For more information on glow, please see:
+    https://github.com/charmbracelet/glow
+    '''
+
+    note = read(filepath)
+
+    if which('glow'):
+        cmd = ['glow','-']
+        text = note[NOTE_TEXT]
+        subprocess.run(['glow','-'], input=text.encode())
+
+    else:
+        print(note[NOTE_TEXT])
+
 def main():
     '''
     Parses command line input and orchestrates core CLI functionality
@@ -204,6 +241,7 @@ def main():
     parser = argparse.ArgumentParser(description='Note creation and management')
     parser.add_argument('--title', '-T', help="title of note - a slug of which will be used for the filename by default")
     parser.add_argument('--tag', '-t', dest='tags', action='append')
+    parser.add_argument('--pretty', action='store_true')
     parser.add_argument('action', nargs='?', choices=['read', 'edit',
         'reformat', 'reformat-all', 'slug', 'push', 'pull'], default='edit', help='action to perform on the note')
     parser.add_argument('filename', nargs='?', help='filename of the note to create or modify')
@@ -212,7 +250,10 @@ def main():
     print(args)
 
     if args.action == 'read' and args.filename:
-        print(fetch(os.path.join(DIR,args.filename)))
+        if args.pretty:
+            pretty(os.path.join(DIR,args.filename))
+        else:
+            print(fetch(os.path.join(DIR,args.filename)))
 
     elif args.action == 'reformat' and args.filename:
         raise NotImplementedError('To be implemented: reformat')
