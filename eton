@@ -34,38 +34,42 @@ def has_metadata(body):
     return body.startswith('---')
 
 def parse(text):
+    '''Splits note into a tuple containing a metadata object and a text string'''
     meta = {}
     body = text
     if has_metadata(text):
-        p = re.compile('---\n(.*?)\n---\n(.*)', flags=re.DOTALL)
-        p.search(text).groups()
+        ptrn = re.compile('---\n(.*?)\n---\n(.*)', flags=re.DOTALL)
+        ptrn.search(text).groups()
         (meta, body) = text.split('---\n', 2)[1:]
-        return (yaml.load(meta,Loader=yaml.FullLoader), body.strip())
-    else:
-        return (meta, body)
+        return (yaml.load(meta, Loader=yaml.FullLoader), body.strip())
+    return (meta, body)
 
 def metadata_to_json(metadata):
+    '''dumps metadata to a json string'''
     return json.dumps(metadata)
 
 def create_metadata_from_file(filepath):
-    p = Path(filepath)
-    stat = p.stat()
+    '''Creates a metadata object using filename as title and native modified and created dates'''
+    fpath = Path(filepath)
+    stat = fpath.stat()
     return {
         'created': datetime.utcfromtimestamp(stat.st_ctime).replace(tzinfo=pytz.UTC).replace(microsecond=0),
         'modified': datetime.utcfromtimestamp(stat.st_mtime).replace(tzinfo=pytz.UTC).replace(microsecond=0),
-        'title': p.stem,
+        'title': fpath.stem,
     }
 
 def fetch(path):
-    with open(path,'r') as f:
-        return f.read()
+    '''Returns the text body of the given path'''
+    with open(path, 'r') as file_pointer:
+        return file_pointer.read()
 
 def read(path):
+    '''Opens the given path and returns a parsed tuple containing the note metadata and text body'''
     text = fetch(path)
     return parse(text)
 
-def get_all_notes(order_by='modified', reverse=True):
-    """List all notes by last modified date"""
+def get_all_notes(order_by='modified_timestamp', reverse=True):
+    '''List all notes by last modified date'''
 
     rows = []
     notes = get_files(DIR, FILENAME_PATTERNS)
@@ -79,17 +83,20 @@ def get_all_notes(order_by='modified', reverse=True):
             'modified_timestamp':stat.st_mtime,
             'modified_iso':datetime.utcfromtimestamp(stat.st_mtime).replace(tzinfo=pytz.UTC).isoformat()
         })
-    rows.sort(key=lambda x: x['modified_timestamp'], reverse=True)
+    rows.sort(key=lambda x: x[order_by], reverse=reverse)
     return rows
 
-def create_metadata(options={}):
+def create_metadata(options=None):
+    '''Creates a new metadata object and merges it with any passed kwargs'''
+    options = options or {}
     metadata = {
         'created': datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0),
         'modified': datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0),
     }
-    return { **metadata, **options }
+    return {**metadata, **options}
 
 def update_metadata_modified(metadata):
+    '''Updates the modified date with the current timestamp'''
     metadata['modified'] = datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0)
     return metadata
 
@@ -101,20 +108,22 @@ def slugify(text):
     slug = re.sub(r'[-]+', '-', slug)
     return slug
 
-def create_filename(title=None):
-    slug = datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0)
+def create_filename(title=None, created=None):
+    '''Creates a generic filename to be used when one is not specified'''
+    if title:
+        slug = slugify(title)
+    elif created:
+        slug = created.isoformat()
+    else:
+        slug = datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0).isoformat()
 
-def create(options):
-    text = ''
-    metadata = create_metadata(options)
-    filename = '%s.%s' % (metadata['created'].isoformat(), EXTENSION)
-    filepath = os.path.join(DIR,filename)
-    return
+    return '%s.%s' % (slug, EXTENSION)
 
-def render(metadata,text):
+def render(metadata, text):
+    '''Merges and formats metadata and text back in to a single string for output'''
     header = yaml.dump(metadata)
     header = "---\n%s---\n" % header
-    return "%s\n%s" % (header,text)
+    return "%s\n%s" % (header, text)
 
 def reformat_all():
     '''Reformats all note documents while maintaining modified date'''
@@ -158,41 +167,45 @@ def write(filepath, metadata, text, ctime=None, mtime=None):
     return filepath
 
 def git_add(filepath):
-
-    relpath = os.path.relpath(filepath,DIR)
-    sp = subprocess.run(['git', '-C', DIR, 'add', relpath])
-    sp = subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Adding new note %s' % relpath])
+    '''Adds and commits a note to the git repo'''
+    relpath = os.path.relpath(filepath, DIR)
+    subprocess.run(['git', '-C', DIR, 'add', relpath], check=True)
+    subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Adding new note %s' % relpath], check=True)
 
 def git_update(filepath):
-
-    relpath = os.path.relpath(filepath,DIR)
-    sp = subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Editing note %s' % relpath])
+    '''Commits note changes to the git repo'''
+    relpath = os.path.relpath(filepath, DIR)
+    subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Editing note %s' % relpath], check=True)
 
 def git_diff(filepath):
-    relpath = os.path.relpath(filepath,DIR)
-    sp = subprocess.run(['git', '-C', DIR, 'diff', relpath, '--name-status'], capture_output=True)
-    print(sp)
+    '''Checks to see if a path has changed'''
+    relpath = os.path.relpath(filepath, DIR)
+    subprocess.run(['git', '-C', DIR, 'diff', relpath, '--name-status'], check=True)
 
 def git_status():
-    sp = subprocess.run(['git','-C',DIR,'status'])
+    '''Prints the git status of the notes directory'''
+    subprocess.run(['git', '-C', DIR, 'status'], check=True)
 
 def git_push():
-    sp = subprocess.run(['git', '-C', DIR, 'push', 'origin', 'master'])
+    '''Pushes the current master branch to origin'''
+    subprocess.run(['git', '-C', DIR, 'push', 'origin', 'master'], check=True)
 
 def git_pull():
-    sp = subprocess.run(['git', '-C', DIR, 'pull', 'origin', 'master'])
-
-def whatwhat(options):
-    print(options)
+    '''Pulls the origin master branch'''
+    subprocess.run(['git', '-C', DIR, 'pull', 'origin', 'master'], check=True)
 
 def which(program):
     '''
+    Determines if a program exists in the PATH of the user
+
     Lifted from https://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
     '''
     def is_exe(fpath):
         return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
     fpath, fname = os.path.split(program)
+    del fname
+
     if fpath:
         if is_exe(program):
             return program
@@ -215,9 +228,9 @@ def pretty(filepath):
     note = read(filepath)
 
     if which('glow'):
-        cmd = ['glow','-']
+        cmd = ['glow', '-']
         text = note[NOTE_TEXT]
-        subprocess.run(['glow','-'], input=text.encode())
+        subprocess.run(cmd, input=text.encode(), check=True)
 
     else:
         print(note[NOTE_TEXT])
@@ -242,8 +255,7 @@ def main():
     parser.add_argument('--title', '-T', help="title of note - a slug of which will be used for the filename by default")
     parser.add_argument('--tag', '-t', dest='tags', action='append')
     parser.add_argument('--pretty', action='store_true')
-    parser.add_argument('action', nargs='?', choices=['read', 'edit',
-        'reformat', 'reformat-all', 'slug', 'push', 'pull'], default='edit', help='action to perform on the note')
+    parser.add_argument('action', nargs='?', choices=['read', 'edit', 'reformat', 'reformat-all', 'slug', 'push', 'pull'], default='edit', help='action to perform on the note')
     parser.add_argument('filename', nargs='?', help='filename of the note to create or modify')
     args = parser.parse_args()
 
@@ -251,9 +263,9 @@ def main():
 
     if args.action == 'read' and args.filename:
         if args.pretty:
-            pretty(os.path.join(DIR,args.filename))
+            pretty(os.path.join(DIR, args.filename))
         else:
-            print(fetch(os.path.join(DIR,args.filename)))
+            print(fetch(os.path.join(DIR, args.filename)))
 
     elif args.action == 'reformat' and args.filename:
         raise NotImplementedError('To be implemented: reformat')
@@ -289,7 +301,7 @@ def main():
 
         slug = args.title and slugify(args.title) or metadata.get('created').isoformat()
         filename = "%s.%s" % (slug, EXTENSION)
-        filepath = os.path.join(DIR,filename)
+        filepath = os.path.join(DIR, filename)
         path = Path(filepath)
 
         # create file if it doesn't exist
@@ -305,7 +317,7 @@ def main():
         print(datetime.utcnow().isoformat())
 
         # open in EDITOR
-        edit_subprocess = subprocess.run([os.environ.get('EDITOR','vim'), filepath])
+        edit_subprocess = subprocess.run([os.environ.get('EDITOR', 'vim'), filepath], check=True)
         print(edit_subprocess)
 
         # datetime when closing editor
@@ -331,48 +343,5 @@ def main():
             # update git repo
             git_update(filepath)
 
-        # git status of notes
-        #git_status()
-
 if __name__ == '__main__':
     main()
-
-    '''
-    paths = reformat_all()
-    print("Reformat complete: %s notes were reformatted" % len(paths))
-    '''
-
-    '''
-    for note in notes:
-        path = note['path']
-        metadata, txt = read(path)
-        if not metadata:
-            metadata = create_metadata_from_file(path)
-
-        rtn = {}
-        rtn['path'] = note['path']
-        rtn['metadata'] = metadata
-        print(yaml.dump(rtn))
-
-    #filepath = notes[-1]['path']
-    #filepath = notes[20]['path']
-    filepath = os.path.join(DIR,'jcinis-14117.md')
-    metadata, text = read(filepath)
-    if not metadata:
-        metadata = create_metadata_from_file(filepath)
-
-    newpath = filepath+".new.txt"
-    write(newpath,metadata,text)
-    print(render(metadata,text))
-    '''
-
-    '''
-    note = get_note(filepath)
-    metadata = metadata_from_file(filepath)
-    metadata['tags'] = ['journal','your mom']
-    metadata_json = metadata_to_json(metadata)
-    print(metadata_json)
-    print(json.dumps(note))
-    note = (metadata,note[1])
-    print(output(*note))
-    '''
