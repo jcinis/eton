@@ -1,26 +1,7 @@
 #!/usr/bin/env python3
 """
-Manage notes using the gitjournal.io notes format
-
-Todo:
-    - [x] Parse note file to return a header dictionary and a markdown body
-    - [x] Convert normal text file to markdown with yaml header
-        - [x] Add modified date based on file modified date
-        - [x] Add created date based on file created date
-        - [x] Add title based on file title
-    - [x] Convert all files in a folder to new format
-    - [x] Add tags header and option to add tags at create
-    - [ ] Create new note
-        - [ ] Add metadata options via the command line similar to docker env (-e) additions.
-        - [x] Add tags via the command line using -t
-        - [ ] Append stdin text if piped in
-    - [x] Update date when saving an existing message
-    - [ ] Add tab completion for selecting notes
-    - [ ] Add images to a folder for linking
-    - [ ] Implement 'reformat-all' to migrate notes to the latest document format
-    - [ ] Preserve note dates based on metadata
-    - [x] Implement 'push' and 'pull' from repo
-
+Eton manages your notes using standard Markdown and updating YAML headers to be
+compatible with the gitjournal.io notes format.
 """
 import re
 import os
