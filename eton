@@ -167,6 +167,12 @@ def write(filepath, metadata, text, ctime=None, mtime=None):
 
     return filepath
 
+def remove(filepath):
+    '''Remove a file from the repo'''
+    relpath = os.path.relpath(filepath, DIR)
+    subprocess.run(['git', '-C', DIR, 'rm', relpath], check=True)
+    subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Deleting note %s' % relpath], check=True)
+
 def git_add(filepath):
     '''Adds and commits a note to the git repo'''
     relpath = os.path.relpath(filepath, DIR)
@@ -258,7 +264,7 @@ def main():
     parser.add_argument('--tag', '-t', dest='tags', action='append')
     #parser.add_argument('-', dest='pipe', action='store_true')
     parser.add_argument('--pretty', action='store_true')
-    parser.add_argument('action', nargs='?', choices=['read', 'edit', 'reformat', 'reformat-all', 'slug', 'push', 'pull'], default='edit', help='action to perform on the note')
+    parser.add_argument('action', nargs='?', choices=['read', 'edit', 'rm', 'reformat', 'reformat-all', 'slug', 'push', 'pull'], default='edit', help='action to perform on the note')
     parser.add_argument('filename', nargs='?', help='filename of the note to create or modify')
     args = parser.parse_args()
 
@@ -284,6 +290,9 @@ def main():
 
     elif args.action == 'push':
         git_push()
+
+    elif args.action == 'rm' and args.filename:
+        remove(args.filename)
 
     else:
 
