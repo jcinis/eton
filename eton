@@ -5,7 +5,6 @@ compatible with the gitjournal.io notes format.
 """
 import re
 import os
-import sys
 import json
 import fileinput
 import subprocess
@@ -15,6 +14,8 @@ from pathlib import Path
 import unicodedata
 import pytz
 import yaml
+
+DEBUG = False
 
 DIR = os.path.expanduser('~/notes')
 EXTENSION = 'md'
@@ -54,8 +55,14 @@ def create_metadata_from_file(filepath):
     fpath = Path(filepath)
     stat = fpath.stat()
     return {
-        'created': datetime.utcfromtimestamp(stat.st_ctime).replace(tzinfo=pytz.UTC).replace(microsecond=0),
-        'modified': datetime.utcfromtimestamp(stat.st_mtime).replace(tzinfo=pytz.UTC).replace(microsecond=0),
+        'created': datetime
+                   .utcfromtimestamp(stat.st_ctime)
+                   .replace(tzinfo=pytz.UTC)
+                   .replace(microsecond=0),
+        'modified': datetime
+                    .utcfromtimestamp(stat.st_mtime)
+                    .replace(tzinfo=pytz.UTC)
+                    .replace(microsecond=0),
         'title': fpath.stem,
     }
 
@@ -77,12 +84,18 @@ def get_all_notes(order_by='modified_timestamp', reverse=True):
     for npath in notes:
         stat = npath.stat()
         rows.append({
-            'path':str(npath),
-            'title':str(npath.stem),
-            'created_timestamp':stat.st_ctime,
-            'created_iso':datetime.utcfromtimestamp(stat.st_ctime).replace(tzinfo=pytz.UTC).isoformat(),
-            'modified_timestamp':stat.st_mtime,
-            'modified_iso':datetime.utcfromtimestamp(stat.st_mtime).replace(tzinfo=pytz.UTC).isoformat()
+            'path': str(npath),
+            'title': str(npath.stem),
+            'created_timestamp': stat.st_ctime,
+            'created_iso': datetime
+                           .utcfromtimestamp(stat.st_ctime)
+                           .replace(tzinfo=pytz.UTC)
+                           .isoformat(),
+            'modified_timestamp': stat.st_mtime,
+            'modified_iso': datetime
+                            .utcfromtimestamp(stat.st_mtime)
+                            .replace(tzinfo=pytz.UTC)
+                            .isoformat()
         })
     rows.sort(key=lambda x: x[order_by], reverse=reverse)
     return rows
@@ -171,13 +184,15 @@ def remove(filepath):
     '''Remove a file from the repo'''
     relpath = os.path.relpath(filepath, DIR)
     subprocess.run(['git', '-C', DIR, 'rm', relpath], check=True)
-    subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Deleting note %s' % relpath], check=True)
+    subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Deleting note %s' % relpath],
+                   check=True)
 
 def git_add(filepath):
     '''Adds and commits a note to the git repo'''
     relpath = os.path.relpath(filepath, DIR)
     subprocess.run(['git', '-C', DIR, 'add', relpath], check=True)
-    subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Adding new note %s' % relpath], check=True)
+    subprocess.run(['git', '-C', DIR, 'commit', relpath, '-m', 'Adding new note %s' % relpath],
+                   check=True)
 
 def git_update(filepath):
     '''Commits note changes to the git repo'''
@@ -264,11 +279,12 @@ def main():
     parser.add_argument('--tag', '-t', dest='tags', action='append')
     #parser.add_argument('-', dest='pipe', action='store_true')
     parser.add_argument('--pretty', action='store_true')
+    parser.add_argument('--debug', action='store_true')
     parser.add_argument('action', nargs='?', choices=['read', 'edit', 'rm', 'reformat', 'reformat-all', 'slug', 'push', 'pull'], default='edit', help='action to perform on the note')
     parser.add_argument('filename', nargs='?', help='filename of the note to create or modify')
     args = parser.parse_args()
 
-    print(args)
+    DEBUG = args.debug
 
     if args.action == 'read' and args.filename:
         if args.pretty:
@@ -331,15 +347,8 @@ def main():
         else:
             LAST = read(filepath)
 
-        # datetime when starting edit
-        print(datetime.utcnow().isoformat())
-
         # open in EDITOR
-        edit_subprocess = subprocess.run([os.environ.get('EDITOR', 'vim'), filepath], check=True)
-        print(edit_subprocess)
-
-        # datetime when closing editor
-        print(datetime.utcnow().isoformat())
+        subprocess.run([os.environ.get('EDITOR', 'vim'), filepath], check=True)
 
         # if new file
         if MODE == MODE_ADD:
@@ -349,17 +358,20 @@ def main():
         else:
             CURR = read(filepath)
             if LAST and LAST == CURR:
-                print('UNMODIFIED')
+                if DEBUG:
+                    print('UNMODIFIED')
             else:
-                print('MODIFIED')
+                if DEBUG:
+                    print('MODIFIED')
+
                 # Update modified date
                 write(filepath, update_metadata_modified(CURR[NOTE_METADATA]), CURR[NOTE_TEXT])
 
                 del LAST
                 del CURR
 
-            # update git repo
-            git_update(filepath)
+                # update git repo
+                git_update(filepath)
 
 if __name__ == '__main__':
     main()
