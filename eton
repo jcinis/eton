@@ -54,13 +54,21 @@ def create_metadata_from_file(filepath):
     '''Creates a metadata object using filename as title and native modified and created dates'''
     fpath = Path(filepath)
     stat = fpath.stat()
+    modified = stat.st_mtime
+    try:
+        # BSD adds an attribute for birthtime
+        created = stat.st_birthtime
+    except AttributeError:
+        # Linux has no way to retrieve created date only modified date
+        created = stat.st_mtime
+
     return {
         'created': datetime
-                   .utcfromtimestamp(stat.st_ctime)
+                   .utcfromtimestamp(created)
                    .replace(tzinfo=pytz.UTC)
                    .replace(microsecond=0),
         'modified': datetime
-                    .utcfromtimestamp(stat.st_mtime)
+                    .utcfromtimestamp(modified)
                     .replace(tzinfo=pytz.UTC)
                     .replace(microsecond=0),
         'title': fpath.stem,
@@ -293,7 +301,7 @@ def main():
             print(fetch(os.path.join(DIR, args.filename)))
 
     elif args.action == 'reformat' and args.filename:
-        raise NotImplementedError('To be implemented: reformat')
+        reformat(args.filename)
 
     elif args.action == 'reformat-all':
         raise NotImplementedError('To be implemented: reformat-all')
