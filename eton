@@ -295,10 +295,16 @@ def main():
     DEBUG = args.debug
 
     if args.action == 'read' and args.filename:
-        if args.pretty:
-            pretty(os.path.join(DIR, args.filename))
+        # Look for file locally before looking in the notes directory
+        if Path(args.filename).is_file():
+            filepath = args.filename
         else:
-            print(fetch(os.path.join(DIR, args.filename)))
+            filepath = os.path.join(DIR, args.filename)
+
+        if args.pretty:
+            pretty(filepath)
+        else:
+            print(fetch(filepath))
 
     elif args.action == 'reformat' and args.filename:
         reformat(args.filename)
@@ -319,6 +325,7 @@ def main():
         remove(args.filename)
 
     else:
+        # action == edit
 
         MODE_ADD = 1
         MODE_UPDATE = 2
@@ -342,9 +349,16 @@ def main():
         #        text += line
         #    fileinput.close()
 
-        slug = args.title and slugify(args.title) or metadata.get('created').isoformat()
-        filename = "%s.%s" % (slug, EXTENSION)
-        filepath = os.path.join(DIR, filename)
+        if args.filename:
+            if Path(args.filename).is_file():
+                filepath = args.filename
+            else:
+                filepath = os.path.join(DIR, args.filename)
+        else:
+            slug = args.title and slugify(args.title) or metadata.get('created').isoformat()
+            filename = "%s.%s" % (slug, EXTENSION)
+            filepath = os.path.join(DIR, filename)
+
         path = Path(filepath)
 
         # create file if it doesn't exist
